@@ -3,11 +3,11 @@ const WebSocket = require('ws');
 const app = express();
 const PORT = 3000;
 
-// Serve frontend files
+// Serve frontend
 app.use(express.static('public'));
-app.listen(PORT, () => console.log(`Frontend served at http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Frontend running at http://localhost:${PORT}`));
 
-// WebSocket server for real-time multiplayer
+// WebSocket server
 const wss = new WebSocket.Server({ port: 8080 });
 
 let players = {};
@@ -15,7 +15,7 @@ let foods = [];
 let viruses = [];
 let powerups = [];
 
-// Initialize entities
+// Spawn entities
 for (let i = 0; i < 200; i++) foods.push({ x: Math.random()*2000, y: Math.random()*2000, size: 5 });
 for (let i = 0; i < 20; i++) viruses.push({ x: Math.random()*2000, y: Math.random()*2000, size: 30 });
 for (let i = 0; i < 20; i++) powerups.push({
@@ -52,8 +52,13 @@ function gameLoop() {
 
     // Broadcast state
     const state = JSON.stringify({ players, foods, viruses, powerups });
-    wss.clients.forEach(client => client.send(state));
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) client.send(state);
+    });
 }
+
+// Run 20 times per second
+setInterval(gameLoop, 50);
 
 wss.on('connection', ws => {
     const id = Date.now();
@@ -61,14 +66,14 @@ wss.on('connection', ws => {
 
     ws.on('message', msg => {
         const data = JSON.parse(msg);
-        if (data.action === 'move') { players[id].x = data.x; players[id].y = data.y; }
-        if (data.action === 'split') { /* add split logic */ }
-        if (data.action === 'eject') { /* add eject logic */ }
+        if (data.action === 'move') {
+            players[id].x = data.x;
+            players[id].y = data.y;
+        }
+        if (data.action === 'split') { /* Add splitting logic */ }
+        if (data.action === 'eject') { /* Add eject logic */ }
         if (data.action === 'changeSkin') players[id].skin = data.skin;
     });
 
     ws.on('close', () => delete players[id]);
 });
-
-// Run game loop 20 times per second
-setInterval(gameLoop, 50);
