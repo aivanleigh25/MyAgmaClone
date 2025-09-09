@@ -1,3 +1,20 @@
+const ws = new WebSocket('ws://localhost:8080');
+
+ws.onmessage = msg => {
+    const state = JSON.parse(msg.data);
+
+    // Update player positions
+    // Example: your render function can read state.players, state.foods, state.powerups
+    // This is where you connect the frontend canvas rendering
+};
+
+function sendMove(x, y) {
+    ws.send(JSON.stringify({ action: 'move', x: x, y: y }));
+}
+
+// Send mouse movement
+document.addEventListener('mousemove', e => sendMove(e.clientX, e.clientY));
+
 // Resize
 $(window).on('resize', function () {
    // windowResize();
@@ -595,4 +612,5 @@ $("[settings-nav]").click(function () {
     $(this).addClass("active");
     $("[settings]").hide();
     $(`[settings=${settings}]`).show();
+
 })
