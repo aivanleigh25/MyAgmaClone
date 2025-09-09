@@ -1,79 +1,49 @@
-const express = require('express');
-const WebSocket = require('ws');
-const app = express();
-const PORT = 3000;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-// Serve frontend
-app.use(express.static('public'));
-app.listen(PORT, () => console.log(`Frontend running at http://localhost:${PORT}`));
+const ws = new WebSocket('ws://localhost:8080');
 
-// WebSocket server
-const wss = new WebSocket.Server({ port: 8080 });
+let state = { players: {}, foods: [], viruses: [], powerups: [] };
+let myId;
 
-let players = {};
-let foods = [];
-let viruses = [];
-let powerups = [];
+ws.onmessage = msg => {
+    state = JSON.parse(msg.data);
+    if (!myId) myId = Object.keys(state.players)[0]; // naive first player ID
+};
 
-// Spawn entities
-for (let i = 0; i < 200; i++) foods.push({ x: Math.random()*2000, y: Math.random()*2000, size: 5 });
-for (let i = 0; i < 20; i++) viruses.push({ x: Math.random()*2000, y: Math.random()*2000, size: 30 });
-for (let i = 0; i < 20; i++) powerups.push({
-    x: Math.random()*2000,
-    y: Math.random()*2000,
-    type: Math.random() > 0.5 ? 'speed' : 'mass'
+document.addEventListener('mousemove', e => {
+    ws.send(JSON.stringify({ action: 'move', x: e.clientX, y: e.clientY }));
 });
 
-// Game loop
-function gameLoop() {
-    for (let id in players) {
-        const p = players[id];
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Food collision
-        foods = foods.filter(f => {
-            const dx = p.x - f.x, dy = p.y - f.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < p.size) { p.size += 0.2; return false; }
-            return true;
-        });
+    // Draw foods
+    ctx.fillStyle = 'yellow';
+    state.foods.forEach(f => ctx.beginPath(), ctx.arc(f.x, f.y, f.size, 0, 2*Math.PI), ctx.fill());
 
-        // Powerup collision
-        powerups = powerups.filter(pu => {
-            const dx = p.x - pu.x, dy = p.y - pu.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < p.size) {
-                if (pu.type === 'speed') p.speedBoost = 200;
-                if (pu.type === 'mass') p.size += 2;
-                return false;
-            }
-            return true;
-        });
+    // Draw viruses
+    ctx.fillStyle = 'green';
+    state.viruses.forEach(v => ctx.beginPath(), ctx.arc(v.x, v.y, v.size, 0, 2*Math.PI), ctx.fill());
+
+    // Draw powerups
+    ctx.fillStyle = 'blue';
+    state.powerups.forEach(p => ctx.beginPath(), ctx.arc(p.x, p.y, 5, 0, 2*Math.PI), ctx.fill());
+
+    // Draw players
+    for (let id in state.players) {
+        const p = state.players[id];
+        ctx.fillStyle = id == myId ? 'red' : 'white';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, 2*Math.PI);
+        ctx.fill();
+        ctx.fillStyle = 'black';
+        ctx.fillText(p.name, p.x - 10, p.y - p.size - 5);
     }
 
-    // Broadcast state
-    const state = JSON.stringify({ players, foods, viruses, powerups });
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) client.send(state);
-    });
+    requestAnimationFrame(draw);
 }
 
-// Run 20 times per second
-setInterval(gameLoop, 50);
-
-wss.on('connection', ws => {
-    const id = Date.now();
-    players[id] = { x: 100, y: 100, size: 10, skin: 'default', name: `Player${id}`, speedBoost: 0 };
-
-    ws.on('message', msg => {
-        const data = JSON.parse(msg);
-        if (data.action === 'move') {
-            players[id].x = data.x;
-            players[id].y = data.y;
-        }
-        if (data.action === 'split') { /* Add splitting logic */ }
-        if (data.action === 'eject') { /* Add eject logic */ }
-        if (data.action === 'changeSkin') players[id].skin = data.skin;
-    });
-
-    ws.on('close', () => delete players[id]);
-});
+draw();
